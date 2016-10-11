@@ -197,6 +197,45 @@ def ad_pull_group_by_objectGuid(rd_AD_ObjGuid):
 	return cstADGrp
 
 
+# Function Display All Nested Members of Group 
+def ad_display_nested_members_by_grp_dn(rd_AD_Grp_DN):
+  
+	#Var for AD Filter
+        adFltr = "(&(objectClass=user)(sAMAccountName=*)(memberOf:1.2.840.113556.1.4.1941:=" + rd_AD_Grp_DN + "))"
+ 
+        # AD Server (using global catalog server. If not then remove port assignment)
+        ms_ad_server = Server(adQryServer, port=3268, get_info=ALL)
+
+	# AD Connection
+        ms_ad_conn = Connection(ms_ad_server, user=adQryAcntUsrID, password=adQryAcntUsrPwd, authentication=NTLM) 
+        # Connect to AD
+        if ms_ad_conn.bind():
+        	#Search AD Global Catalog Server for ObjectGuid
+                ms_ad_conn.search(search_base=adQrySrchBase,
+                                 search_filter=adFltr,
+                                 search_scope=SUBTREE,
+                                 attributes = ["sAMAccountName","distinguishedName"],
+                                 size_limit=0) 
+                #print(ms_ad_conn.entries)
+                if(ms_ad_conn.entries and len(ms_ad_conn.entries) > 0):
+ 
+                	print("Members (including nested):")
+                        print(" ")
+ 
+                        for nstMbr in ms_ad_conn.entries:
+                        	print(nstMbr.distinguishedName)
+ 
+ 
+                        print(" ")
+
+		#Unbind connection to AD
+                ms_ad_conn.unbind()
+ 
+         else:
+
+		print('no go at this station')
+
+
 
 print(" ")
 print("Pulling Group Information")
@@ -262,6 +301,12 @@ print(cstADGroupAfter.member)
 print(" ")
 print("Total member count after: " + str(len(cstADGroupAfter.member)))
 print(" ")
+
+
+print("Pulling Nested Member Information")
+print(" ")
+ad_display_nested_members_by_grp_dn(cstADGroupAfter.dn)
+
 
 
 
