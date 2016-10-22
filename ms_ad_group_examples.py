@@ -4,24 +4,12 @@ from ldap3 import Server, Connection, SIMPLE, SYNC, ALL, SASL, SUBTREE, NTLM, BA
 import ldap3
 import uuid
 import time
+import json
+import ad_common_tools
 
-# Load Account Password File (not secure method. just for demo)
-flTxADAcnt = open("ad_account_pwd.txt")
 
-# AD Account to use for query calls
-adQryAcntUsrID = "domain\\userID"
-adQryAcntUsrPwd = str(flTxADAcnt.read()).strip().replace("\\n","")
-
-# AD Servers to query against
-# Ideally a Global Catalog Servers. Listed two for ADs with group resources in child domains
-adQryServer = "dc1.mycollege.edu"
-adQryServer2 = "dc2.engr.mycollege.edu"
-
-# AD Search Base
-# Listed two for ADs with resources in child domains.
-adQrySrchBase = "DC=MYCOLLEGE,DC=EDU"
-adQrySrchBase2 = "DC=ENGR,DC=MYCOLLEGE,DC=EDU"
-
+#Load AD Config 
+ad_config = ad_common_tools.AD_Config_Cst()
 
 # Class for AD Group
 class AD_Group_Cst:
@@ -42,15 +30,15 @@ def ad_pull_user_dn_by_userid(rd_AD_SAM):
 	adFltr = "(&(objectclass=user)(!(objectclass=computer))(sAMAccountName=" + rd_AD_SAM  + "))"
 
 	# AD Server
-	ms_ad_server = Server(adQryServer, get_info=ALL)
+	ms_ad_server = Server(ad_config.DC_Root, get_info=ALL)
 
 	# AD Connection
-	ms_ad_conn = Connection(ms_ad_server, user=adQryAcntUsrID, password=adQryAcntUsrPwd, authentication=NTLM)
+	ms_ad_conn = Connection(ms_ad_server, user=ad_config.AD_Accnt, password=ad_config.AD_Pwd, authentication=NTLM)
 
 	# Connect to AD
 	if ms_ad_conn.bind():
 		#Search AD 
-		ms_ad_conn.search(search_base=adQrySrchBase, 
+		ms_ad_conn.search(search_base=ad_config.Path_Root, 
                          	search_filter=adFltr, 
                          	search_scope=SUBTREE, 
                          	attributes = ["distinguishedName"], 
@@ -69,23 +57,6 @@ def ad_pull_user_dn_by_userid(rd_AD_SAM):
 	return adUsrDN
 
 
-# Function for Formating AD ObjectGuid in Little Endian Format for Searches
-# (e.g. 7fcb5751-bb65-4035-aa51-230a715faa8a will return \51\57\CB\7F\65\BB\35\40\AA\51\23\0A\71\5F\AA\8A) 
-def ad_endian_srch_format(rdGuid):
-
-	#Var for Return Value
-	fltrGuid = ""
-
-	#Parse into Guid 
-	wrkGuid = uuid.UUID('{' + rdGuid + '}')
-
-	for wrkByte in wrkGuid.bytes_le:
-		fltrGuid += "\\" + "{:02x}".format(wrkByte).upper()
-	
-	
-	return fltrGuid
-
-
 # Function Pull AD Group by ObjectGuid (e.g. 7fcb5751-bb65-4035-aa51-230a715faa8a)
 def ad_pull_group_by_objectGuid(rd_AD_ObjGuid):
 	
@@ -93,18 +64,18 @@ def ad_pull_group_by_objectGuid(rd_AD_ObjGuid):
 	cstADGrp = AD_Group_Cst()
 
 	#Var for AD Filter
-	adFltr = "(objectGuid=" + ad_endian_srch_format(rd_AD_ObjGuid) + ")"
+	adFltr = "(objectGuid=" + ad_common_tools.ad_endian_srch_format(rd_AD_ObjGuid) + ")"
 
 	# AD Server (using global catalog server. If not then remove port assignment)
-	ms_ad_server = Server(adQryServer, port=3268, get_info=ALL)
+	ms_ad_server = Server(ad_config.DC_Root, port=3268, get_info=ALL)
 
 	# AD Connection
-	ms_ad_conn = Connection(ms_ad_server, user=adQryAcntUsrID, password=adQryAcntUsrPwd, authentication=NTLM)
+	ms_ad_conn = Connection(ms_ad_server, user=ad_config.AD_Accnt, password=ad_config.AD_Pwd, authentication=NTLM)
 
 	# Connect to AD
 	if ms_ad_conn.bind():
 		#Search AD Global Catalog Server for ObjectGuid
-		ms_ad_conn.search(search_base=adQrySrchBase, 
+		ms_ad_conn.search(search_base=ad_config.Path_Root, 
                          	search_filter=adFltr, 
                          	search_scope=SUBTREE, 
                          	attributes = ["objectGuid","cn","distinguishedName","member"], 
@@ -148,7 +119,7 @@ def ad_pull_group_by_objectGuid(rd_AD_ObjGuid):
 					grpPullCont = False
 					
 					#Search to Pull Next Range of Group Members
-					ms_ad_conn.search(search_base=adQrySrchBase,
+					ms_ad_conn.search(search_base=ad_config.Path_Root,
 							  search_filter=adFltr,
 							  search_scope=SUBTREE,
 							  attributes = [grpPullAttrb],
@@ -197,42 +168,45 @@ def ad_pull_group_by_objectGuid(rd_AD_ObjGuid):
 	return cstADGrp
 
 
+
 # Function Display All Nested Members of Group 
 def ad_display_nested_members_by_grp_dn(rd_AD_Grp_DN):
-  
+	
+
 	#Var for AD Filter
-        adFltr = "(&(objectClass=user)(sAMAccountName=*)(memberOf:1.2.840.113556.1.4.1941:=" + rd_AD_Grp_DN + "))"
- 
-        # AD Server (using global catalog server. If not then remove port assignment)
-        ms_ad_server = Server(adQryServer, port=3268, get_info=ALL)
+	adFltr = "(&(objectClass=user)(sAMAccountName=*)(memberOf:1.2.840.113556.1.4.1941:=" + rd_AD_Grp_DN + "))"
+
+	# AD Server (using global catalog server. If not then remove port assignment)
+	ms_ad_server = Server(ad_config.DC_Root, port=3268, get_info=ALL)
 
 	# AD Connection
-        ms_ad_conn = Connection(ms_ad_server, user=adQryAcntUsrID, password=adQryAcntUsrPwd, authentication=NTLM) 
-        # Connect to AD
-        if ms_ad_conn.bind():
-        	#Search AD Global Catalog Server for ObjectGuid
-                ms_ad_conn.search(search_base=adQrySrchBase,
-                                 search_filter=adFltr,
-                                 search_scope=SUBTREE,
-                                 attributes = ["sAMAccountName","distinguishedName"],
-                                 size_limit=0) 
-                #print(ms_ad_conn.entries)
-                if(ms_ad_conn.entries and len(ms_ad_conn.entries) > 0):
- 
-                	print("Members (including nested):")
-                        print(" ")
- 
-                        for nstMbr in ms_ad_conn.entries:
-                        	print(nstMbr.distinguishedName)
- 
- 
-                        print(" ")
+	ms_ad_conn = Connection(ms_ad_server, user=ad_config.AD_Accnt, password=ad_config.AD_Pwd, authentication=NTLM)
 
+	# Connect to AD
+	if ms_ad_conn.bind():
+		#Search AD Global Catalog Server for ObjectGuid
+		ms_ad_conn.search(search_base=ad_config.Path_Root, 
+                         	search_filter=adFltr, 
+                         	search_scope=SUBTREE, 
+                         	attributes = ["sAMAccountName","distinguishedName"], 
+                         	size_limit=0)
+
+		#print(ms_ad_conn.entries)
+		if(ms_ad_conn.entries and len(ms_ad_conn.entries) > 0):
+			
+			print("Members (including nested):")
+			print(" ")
+			
+			for nstMbr in ms_ad_conn.entries:
+				print(nstMbr.distinguishedName)		
+
+
+			print(" ")
+				
 		#Unbind connection to AD
-                ms_ad_conn.unbind()
- 
-         else:
+		ms_ad_conn.unbind()
 
+	else:
 		print('no go at this station')
 
 
@@ -248,7 +222,9 @@ print("cn: " + cstADGroup.cn)
 print("distringuishedName: " + cstADGroup.dn)
 print("objectGuid: " + cstADGroup.objectguid)
 print("member:")
-print(cstADGroup.member)
+for grpMbr in cstADGroup.member:
+	print(grpMbr)
+
 print(" ")
 print("Total member count: " + str(len(cstADGroup.member)))
 
@@ -257,15 +233,15 @@ print("Retrieving user accounts to add or remove from group")
 print(" ")
 
 # Get AD User1's DN
-adUsr1_dn = ad_pull_user_dn_by_userid("userid1")
+adUsr1_dn = ad_pull_user_dn_by_userid("exmp_user1")
 print(adUsr1_dn)
 
 # Get AD User2's DN
-adUsr2_dn = ad_pull_user_dn_by_userid("userid2")
+adUsr2_dn = ad_pull_user_dn_by_userid("exmp_user2")
 print(adUsr2_dn)
 
 # Get AD User3's DN
-adUsr3_dn = ad_pull_user_dn_by_userid("userid3")
+adUsr3_dn = ad_pull_user_dn_by_userid("exmp_user3")
 print(adUsr3_dn)
 
 print(" ")
@@ -273,8 +249,8 @@ print("Making group membership changes")
 print(" ")
 
 # Connect to AD and Modify the Group Membership
-ms_ad_server2 = Server(adQryServer2, get_info=ALL)
-ms_ad_conn2 = Connection(ms_ad_server2, user=adQryAcntUsrID, password=adQryAcntUsrPwd, authentication=NTLM)
+ms_ad_server2 = Server(ad_config.DC_Child, get_info=ALL)
+ms_ad_conn2 = Connection(ms_ad_server2, user=ad_config.AD_Accnt, password=ad_config.AD_Pwd, authentication=NTLM)
 ms_ad_conn2.bind()
 
 # Add User1 and User3 to the Group
@@ -297,15 +273,18 @@ cstADGroupAfter = ad_pull_group_by_objectGuid("407f5264-9564-485f-8c83-7214afed1
 print(" ")
 print("cn: " + cstADGroupAfter.cn)
 print("member:")
-print(cstADGroupAfter.member)
+for grpMbrAft in cstADGroupAfter.member:
+	print(grpMbrAft)
+
 print(" ")
 print("Total member count after: " + str(len(cstADGroupAfter.member)))
 print(" ")
-
+print(" ")
 
 print("Pulling Nested Member Information")
 print(" ")
 ad_display_nested_members_by_grp_dn(cstADGroupAfter.dn)
+
 
 
 

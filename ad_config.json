@@ -1,0 +1,7 @@
+{
+  "AD_Accnt":"engr\\coe-neelix",
+  "DC_Root":"dc1.mycollege.edu",
+  "DC_Child":"dc4.engr.mycollege.edu",
+  "Path_Root":"DC=mycollege,DC=edu",
+  "Path_Child":"DC=engr,DC=mycollege,DC=edu"
+}
