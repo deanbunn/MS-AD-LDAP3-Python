@@ -1,8 +1,8 @@
 ## MS-AD-LDAP3-Python
 
-### Example scripts for working with Microsoft Active Directory using Python and the LDAP3 module.
+#### Example scripts for working with Microsoft Active Directory using Python and the LDAP3 module.
 
-##### Project Files:
+#### Project Files:
 
 ad_config.json contains the values of the AD account to use when querying, domain controller names, and search paths
 
